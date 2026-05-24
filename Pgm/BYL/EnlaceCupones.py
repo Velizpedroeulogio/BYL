@@ -1,4 +1,6 @@
 import flet as ft
+import hashlib
+import hmac as _hmac_mod
 import sqlite3
 import webbrowser
 from urllib.parse import quote
@@ -17,6 +19,25 @@ try:
     wKeyCvt2 = os.environ['GBYL_KEY2']
 except:
     wKeyCvt2 = "ABCDEFGHIJ"
+
+_CUPON_HMAC_KEY = os.environ.get("CUPON_HMAC_KEY", "")
+
+
+def calcular_hmac_cupon(ev, sec) -> str:
+    if not _CUPON_HMAC_KEY:
+        return ""
+    msg = f"{int(ev):05d}{int(sec):06d}".encode()
+    return _hmac_mod.new(_CUPON_HMAC_KEY.encode(), msg, hashlib.sha256).hexdigest()[:8]
+
+
+def asegurar_columna_adic():
+    cnx = sqlite3.connect(DB)
+    try:
+        cnx.execute("ALTER TABLE INF_URL ADD COLUMN INF_ADIC TEXT")
+        cnx.commit()
+    except Exception:
+        pass
+    cnx.close()
 
                                                                     # UTILIDADES
 def solo_numeros(txt):
@@ -185,6 +206,7 @@ def generar_id_cupon(ev, sec):
     return f"{s_evn}{s_sec}{dv1}{dv2}", dv1, dv2
 
 def guardar_inf_url(ev, sec, dv1, dv2, data_txt):
+    hmac_code = calcular_hmac_cupon(ev, sec)
     cnx = sqlite3.connect(DB)
     cur = cnx.cursor()
 
@@ -192,19 +214,19 @@ def guardar_inf_url(ev, sec, dv1, dv2, data_txt):
         cur.execute(
             """
             INSERT INTO INF_URL
-                (INF_EVN, INF_SEC, INF_DV1, INF_DV2, INF_DTA)
-            VALUES (?, ?, ?, ?, ?)
+                (INF_EVN, INF_SEC, INF_DV1, INF_DV2, INF_DTA, INF_ADIC)
+            VALUES (?, ?, ?, ?, ?, ?)
             """,
-            (int(ev), int(sec), int(dv1), int(dv2), str(data_txt or "")), )
+            (int(ev), int(sec), int(dv1), int(dv2), str(data_txt or ""), hmac_code or None), )
 
     except sqlite3.IntegrityError:
         cur.execute(
             """
             UPDATE INF_URL
-               SET INF_DV1 = ?, INF_DV2 = ?, INF_DTA = ?
+               SET INF_DV1 = ?, INF_DV2 = ?, INF_DTA = ?, INF_ADIC = ?
              WHERE INF_EVN = ? AND INF_SEC = ?
             """,
-            (int(dv1), int(dv2), str(data_txt or ""), int(ev), int(sec)), )
+            (int(dv1), int(dv2), str(data_txt or ""), hmac_code or None, int(ev), int(sec)), )
 
     cnx.commit()
     cnx.close()
@@ -376,6 +398,7 @@ def main(page: ft.Page):
     page.padding = 20
     page.scroll = ft.ScrollMode.AUTO
 
+    asegurar_columna_adic()
     eventos = get_eventos()
     matrices = get_matrices()
 
