@@ -736,7 +736,8 @@ def main(page: ft.Page):
             guardar_inf_url( data.get("EVNC_NUM", "0"),
                              data.get("EVNC_SEC", "0"),
                              dv1, dv2, data_guardar,   )
-            txt_url.value = URL_VISOR + url_id
+            hmac_code = calcular_hmac_cupon(data.get("EVNC_NUM", ""), data.get("EVNC_SEC", ""))
+            txt_url.value = URL_VISOR + url_id + hmac_code
 
             page.update()
 
